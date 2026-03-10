@@ -204,52 +204,168 @@ Continue until the user says stop.
 
 ---
 
-## Setup — New User Flow
+## Setup — Guided First-Time Flow
 
-If the user hasn't set up the skill yet, walk them through this:
+**Trigger:** User says "set up annotate", "set up skill-annotate", "annotate setup", or env vars are missing when they try to use the skill.
 
-### 1. Create a Supabase Project
-- Go to [supabase.com](https://supabase.com) → New project (free tier is fine)
-- Note your **Project URL** and **Anon Key** (Settings → API)
+Run this as a conversation — don't dump all steps at once. Walk them through one step at a time, confirm before moving to the next.
 
-### 2. Run the Database Schema
-- In Supabase Dashboard → SQL Editor
-- Run the contents of `skill-annotate/setup.sql`
-- This creates the `annotations` table with the right columns and RLS policies
+---
 
-### 3. Add Env Vars to Vercel
-In your Vercel project settings → Environment Variables, add:
-```
-ANNOTATE_SUPABASE_URL=https://your-project.supabase.co
-ANNOTATE_SUPABASE_ANON_KEY=your-anon-key
-```
+### Step 0 — Check if already set up
 
-Also add to your local `.env.local` for development.
-
-### 4. Add the Widget to Your App
-- See `skill-annotate/widget/README.md` for drop-in instructions
-- Typically: import the widget script and call `initAnnotate()` in your layout
-
-### 5. Add the 3 API Routes
-Copy from `skill-annotate/api/` into your app's API directory:
-- `annotations-list.ts` — GET, returns annotations by status
-- `annotation-create.ts` — POST, creates a new annotation
-- `annotation-update.ts` — PATCH, updates status/thread
-
-### 6. Deploy
 ```bash
-git add . && git commit -m "feat: add annotation widget and API routes"
+echo $ANNOTATE_SUPABASE_URL
+echo $ANNOTATE_SUPABASE_ANON_KEY
+```
+
+If both are set and non-empty → skip to "Test It" section. Already configured.
+
+If missing → start the guided flow below.
+
+---
+
+### Guided Flow (one step at a time)
+
+**Open with:**
+> "Let's get skill-annotate set up. It takes about 3 minutes. I'll walk you through each step — just confirm when you're ready to move on."
+
+---
+
+**Step 1 — Create a free Supabase project**
+
+Say:
+> "First, go to supabase.com and create a free project. Name it anything — 'skill-annotate' works.
+> Once it's provisioned (takes ~30 seconds), let me know and I'll tell you what to grab."
+
+Wait for confirmation. Then:
+
+> "Perfect. Now go to:
+> **Project Settings → API**
+>
+> You'll see two things — copy both:
+> 1. **Project URL** — looks like `https://xxxxxxxxxxx.supabase.co`
+> 2. **anon / public key** — a long string starting with `eyJ...`
+>
+> Paste them here when you have them."
+
+When user pastes the values — store them mentally for the next steps.
+
+---
+
+**Step 2 — Run the database schema**
+
+Say:
+> "Now go to the **SQL Editor** in your Supabase dashboard (left sidebar).
+> Create a new query and paste this SQL — it creates the annotations table and security rules:"
+
+Then output the full contents of `skill-annotate/setup.sql` in a code block.
+
+Say:
+> "Click **Run**. You should see 'Success, no rows returned'. Let me know when done."
+
+---
+
+**Step 3 — Add env vars to OpenClaw**
+
+Say:
+> "Now I'll save your Supabase credentials to your OpenClaw environment so every app can use them.
+> Run these two commands in your terminal:"
+
+```bash
+openclaw env set ANNOTATE_SUPABASE_URL="<their project URL>"
+openclaw env set ANNOTATE_SUPABASE_ANON_KEY="<their anon key>"
+```
+
+Or, if OpenClaw env CLI isn't available, tell them to add to `~/.openclaw/openclaw.json` under `env`:
+```json
+{
+  "env": {
+    "ANNOTATE_SUPABASE_URL": "https://xxx.supabase.co",
+    "ANNOTATE_SUPABASE_ANON_KEY": "eyJ..."
+  }
+}
+```
+
+Say:
+> "This is a one-time step. Every app you annotate in the future will reuse the same Supabase project — no new setup needed."
+
+---
+
+**Step 4 — Add the widget + API routes to an app**
+
+Say:
+> "Now let's add the widget to one of your Vercel apps. Which app do you want to annotate first? Give me the repo path on your machine."
+
+Once they give the path:
+
+1. Check the framework:
+```bash
+cat <repo>/package.json | grep '"next"\|"remix"\|"svelte"\|"nuxt"'
+```
+
+2. Copy the 3 API route files to the right location:
+   - **Next.js (app router):** `app/api/annotations-list/route.ts`, `app/api/annotation-create/route.ts`, `app/api/annotation-update/route.ts`
+   - **Next.js (pages router):** `pages/api/annotations-list.ts`, `pages/api/annotation-create.ts`, `pages/api/annotation-update.ts`
+   - **Other:** ask the user where their API routes live
+
+3. Inject widget script into their layout file. Find it:
+```bash
+find <repo>/app -name "layout.tsx" | head -3
+find <repo>/pages -name "_app.tsx" | head -3
+```
+
+Add before `</body>`:
+```html
+<script
+  src="https://cdn.jsdelivr.net/gh/raytheghar-alt/skill-annotate/widget/annotate.js"
+  data-app-url="https://yourapp.vercel.app"
+></script>
+```
+
+Replace `data-app-url` with their actual deployed URL.
+
+Say:
+> "I've added the API routes and widget. Ready to deploy?"
+
+---
+
+**Step 5 — Deploy**
+
+```bash
+cd <repo>
+git add .
+git commit -m "feat: add skill-annotate widget and API routes"
+git push
 vercel --prod
 ```
 
-### 7. Test It
-- Open your deployed app
-- Click an element while holding the annotation key (default: `Alt+Click`)
-- Add a comment, set severity, submit
-- Ask Ray: "check my annotations"
+Say:
+> "Deploying. Give it a minute and then open your live app."
 
-Full Supabase setup details: `skill-annotate/README-supabase.md`
-Widget customization: `skill-annotate/widget/README.md`
+---
+
+**Step 6 — Test it**
+
+Say:
+> "Open your deployed app. You should see a small floating panel on the right edge of the screen.
+>
+> Click the panel to open it, then click any element on your page. A tooltip will appear — write some feedback, set severity, hit Submit.
+>
+> Then come back here and say: **'check my annotations'** — I'll pick it up and show you what I found."
+
+---
+
+**Wrap-up message after full setup:**
+
+> "You're set up. Here's how it works going forward:
+>
+> — Anyone can drop annotations on your app (the panel is always visible)
+> — Feedback persists in Supabase, scoped to your app URL
+> — When you're ready for fixes, just say: **'check my annotations'**
+> — I'll read the queue, fix the code, and mark everything resolved
+>
+> For any new app: just copy the 3 API routes + add the widget script. One-time per app, nothing else to configure."
 
 ---
 
